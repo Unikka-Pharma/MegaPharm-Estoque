@@ -1,13 +1,12 @@
 services:
   db:
     image: postgres:16
-    container_name: megapharm-db
     environment:
       POSTGRES_USER: megapharm
       POSTGRES_PASSWORD: megapharm
       POSTGRES_DB: megapharm
     ports:
-      - "5433:5432"          # host 5433 -> container 5432 (5432 do host é do checkout)
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,29 +14,30 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      restart_policy:
+        condition: any
 
   app:
-    build: .                 # imagem buildada do código do repo (Dockerfile)
-    image: megapharm-estoque:local
-    container_name: megapharm-app
+    image: SEU_REGISTRY/megapharm-estoque:latest   # <-- precisa ser uma imagem já publicada
     depends_on:
-      db:
-        condition: service_healthy
-    env_file:
-      - .env                 # segredos e config (JWT, WEBHOOK, HUBSPOT, ADMIN)
+      - db
     environment:
       NODE_ENV: production
       PORT: "3000"
-      # dentro da rede do compose o banco é 'db:5432' (sobrescreve o .env)
       DATABASE_URL: postgres://megapharm:megapharm@db:5432/megapharm
+      # demais variáveis (JWT_SECRET, WEBHOOK_SECRET, HUBSPOT_*, ADMIN_*) também aqui,
+      # já que env_file costuma ser ignorado no modo Swarm
     ports:
-      - "3100:3000"          # painel em http://localhost:3100
-    restart: unless-stopped
+      - "3100:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      restart_policy:
+        condition: any
 
 volumes:
   pgdata:

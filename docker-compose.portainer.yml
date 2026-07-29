@@ -1,7 +1,7 @@
 # Stack MegaPharm Estoque — Docker Swarm + Traefik (padrao da infra Unikka/Mega).
 #
 # Imagem publicada pelo GitHub Actions a cada push na main:
-#   ghcr.io/unikka-pharma/megapharm:latest
+#   ghcr.io/unikka-pharma/megapharm-estoque:latest
 #
 # Deploy no Portainer (Swarm):
 #   Stacks -> Add stack -> Web editor -> cole este arquivo.
@@ -43,7 +43,7 @@ services:
           memory: 1G
 
   megapharm-app:
-    image: ghcr.io/unikka-pharma/megapharm:latest
+    image: ghcr.io/unikka-pharma/megapharm-estoque:latest
     networks:
       - main
     environment:

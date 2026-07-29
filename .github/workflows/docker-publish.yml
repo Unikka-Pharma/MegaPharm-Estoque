@@ -29,7 +29,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/Unikka-Pharma/MegaPharm-Estoque
+          # github.repository = owner/repo (ex.: Unikka-Pharma/MegaPharm-Estoque).
+          # O metadata-action converte para minusculas: ghcr.io/unikka-pharma/megapharm-estoque
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest
             type=sha

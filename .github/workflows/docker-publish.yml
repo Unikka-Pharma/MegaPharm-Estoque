@@ -1,6 +1,8 @@
 name: build-image
 
-# Builda a imagem a cada push na main e publica no GitHub Container Registry (ghcr.io).
+# Builda a imagem a cada push na main e publica no Docker Hub (docker.io).
+# Usa os secrets DOCKER_USERNAME / DOCKER_PASSWORD ja configurados no repo
+# (mesma conta unikkapharma dos demais servicos da infra).
 # O Portainer entao so puxa a imagem publicada — nao precisa buildar nada.
 
 on:
@@ -10,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build:
@@ -18,20 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login no ghcr.io
+      - name: Login no Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Metadados/tags
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # github.repository = owner/repo (ex.: Unikka-Pharma/MegaPharm-Estoque).
-          # O metadata-action converte para minusculas: ghcr.io/unikka-pharma/megapharm-estoque
-          images: ghcr.io/${{ github.repository }}
+          # Namespace unikkapharma no Docker Hub (igual aos outros servicos).
+          images: docker.io/unikkapharma/megapharm-estoque
           tags: |
             type=raw,value=latest
             type=sha

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MegaPharm — Estoque</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Login -->
+  <div id="login" class="login hidden">
+    <form id="login-form" class="card">
+      <h1>MegaPharm <span>Estoque</span></h1>
+      <label>E-mail<input type="email" id="email" autocomplete="username" required /></label>
+      <label>Senha<input type="password" id="password" autocomplete="current-password" required /></label>
+      <button type="submit">Entrar</button>
+      <p id="login-error" class="error"></p>
+    </form>
+  </div>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <header>
+      <strong>MegaPharm · Estoque</strong>
+      <nav>
+        <button data-tab="produtos" class="active">Produtos</button>
+        <button data-tab="alertas">Alertas <span id="alert-badge" class="badge hidden">0</span></button>
+        <button data-tab="movimentos">Movimentos</button>
+        <button data-tab="relatorios">Relatórios</button>
+      </nav>
+      <div class="spacer"></div>
+      <span id="who" class="muted"></span>
+      <button id="logout" class="ghost">Sair</button>
+    </header>
+
+    <main>
+      <!-- Produtos -->
+      <section id="tab-produtos" class="tab">
+        <div class="row between">
+          <h2>Produtos</h2>
+          <button id="btn-new-product">+ Produto</button>
+        </div>
+        <form id="product-form" class="card form-grid hidden">
+          <label class="field">
+            <span>SKU <em class="req">*</em></span>
+            <input id="p-sku" placeholder="ex: MED-001" required />
+          </label>
+          <label class="field">
+            <span>Nome do produto <em class="req">*</em></span>
+            <input id="p-name" placeholder="ex: Dipirona 500mg" required />
+          </label>
+          <label class="field narrow">
+            <span>Unidade</span>
+            <input id="p-unit" value="un" placeholder="un" />
+          </label>
+          <label class="field narrow">
+            <span>Estoque mínimo</span>
+            <input id="p-min" type="number" min="0" value="0" title="abaixo disso o produto entra no relatório de estoque baixo" />
+          </label>
+          <button type="submit">Salvar</button>
+          <button type="button" class="ghost" id="p-cancel">Cancelar</button>
+        </form>
+        <table id="products">
+          <thead><tr>
+            <th>SKU</th><th>Produto</th>
+            <th class="num">Estoque</th><th class="num">Lotes</th><th class="num">Mínimo</th>
+            <th class="right"></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Alertas -->
+      <section id="tab-alertas" class="tab hidden">
+        <h2>Alertas</h2>
+        <table id="alerts">
+          <thead><tr><th>Data</th><th>Tipo</th><th>Pedido</th><th>SKU</th><th>Mensagem</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Movimentos -->
+      <section id="tab-movimentos" class="tab hidden">
+        <div class="row between">
+          <h2>Movimentos</h2>
+          <input id="mov-filter" placeholder="filtrar por pedido (order_id)" style="width:280px" />
+        </div>
+        <table id="movements">
+          <thead><tr>
+            <th>Data</th><th>SKU</th><th>Produto</th><th>Lote</th>
+            <th class="num">Qtd</th><th>Motivo</th><th>Pedido</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Relatórios -->
+      <section id="tab-relatorios" class="tab hidden">
+        <h2>Estoque baixo</h2>
+        <table id="low-stock">
+          <thead><tr><th>SKU</th><th>Produto</th><th class="num">Estoque</th><th class="num">Mínimo</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <h2>Vencendo em <input id="exp-days" type="number" value="90" min="0" style="width:70px" /> dias</h2>
+        <table id="expiring">
+          <thead><tr><th>SKU</th><th>Produto</th><th>Lote</th><th>Validade</th><th class="num">Saldo</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal de lotes -->
+  <div id="batch-modal" class="modal hidden">
+    <div class="card modal-card">
+      <div class="row between">
+        <h3 id="bm-title">Lotes</h3>
+        <button class="ghost" id="bm-close">✕</button>
+      </div>
+      <!-- Formulário vem antes da lista: continua acessível com muitos lotes -->
+      <div class="panel">
+        <h4>Nova entrada de lote</h4>
+        <p class="hint">A <strong>validade</strong> define a ordem de saída: o lote que vence antes é baixado primeiro (FEFO).</p>
+        <form id="batch-form" class="form-grid">
+          <label class="field">
+            <span>Nº do lote <em class="req">*</em></span>
+            <input id="b-lote" placeholder="ex: L2401" required />
+          </label>
+          <label class="field">
+            <span>Data de fabricação</span>
+            <input id="b-fab" type="date" />
+          </label>
+          <label class="field">
+            <span>Data de validade <em class="req">*</em></span>
+            <input id="b-val" type="date" required />
+          </label>
+          <label class="field narrow">
+            <span>Quantidade <em class="req">*</em></span>
+            <input id="b-qty" type="number" min="1" placeholder="0" required />
+          </label>
+          <button type="submit">Adicionar</button>
+        </form>
+        <p id="bm-error" class="error"></p>
+      </div>
+
+      <div class="row between bm-toolbar">
+        <span id="bm-summary" class="muted"></span>
+        <div class="row">
+          <input id="bm-filter" placeholder="buscar lote…" style="width:170px" />
+          <label class="check"><input type="checkbox" id="bm-show-zero" /> mostrar zerados</label>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table id="batch-table">
+          <thead><tr>
+            <th>Lote</th><th>Fabricação</th><th>Validade</th>
+            <th class="num">Saldo</th><th class="right">Ajuste</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

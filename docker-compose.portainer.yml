@@ -1,0 +1,97 @@
+# Stack MegaPharm Estoque — Docker Swarm + Traefik (padrao da infra Unikka/Mega).
+#
+# Imagem publicada pelo GitHub Actions a cada push na main:
+#   ghcr.io/cairowesley/megapharm:latest
+#
+# Deploy no Portainer (Swarm):
+#   Stacks -> Add stack -> Web editor -> cole este arquivo.
+#   Em "Environment variables", defina: DB_PASSWORD, JWT_SECRET, WEBHOOK_SECRET,
+#   HUBSPOT_API_TOKEN, ADMIN_EMAIL, ADMIN_PASSWORD.
+#   Ajuste o Host(`...`) do Traefik e aponte o DNS pro cluster.
+#
+# O banco e as tabelas sao criados sozinhos no 1o boot (migrations + admin).
+# Sem depends_on: no Swarm o app reinicia sozinho ate o banco subir (restart_policy).
+
+services:
+  megapharm-db:
+    image: postgres:16
+    networks:
+      - main
+    environment:
+      POSTGRES_USER: megapharm
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD}
+      POSTGRES_DB: megapharm
+    volumes:
+      - megapharm-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U megapharm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager      # volume e local ao no: fixa o banco no manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  megapharm-app:
+    image: ghcr.io/cairowesley/megapharm:latest
+    networks:
+      - main
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://megapharm:${DB_PASSWORD}@megapharm-db:5432/megapharm
+      - JWT_SECRET=${JWT_SECRET:?defina JWT_SECRET}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:?defina WEBHOOK_SECRET}
+      - ACCEPTED_EVENTS=transaction.paid
+      - HUBSPOT_API_TOKEN=${HUBSPOT_API_TOKEN:?defina HUBSPOT_API_TOKEN}
+      - HUBSPOT_BASE_URL=https://api.hubapi.com
+      - HUBSPOT_SKU_PROPERTY=hs_sku
+      - ADMIN_EMAIL=${ADMIN_EMAIL:?defina ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?defina ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.megapharm-estoque.rule=Host(`estoque.vps.megapharmoficial.com.br`)
+        - traefik.http.services.megapharm-estoque.loadbalancer.server.port=3000
+        - traefik.http.routers.megapharm-estoque.service=megapharm-estoque
+        - traefik.http.routers.megapharm-estoque.entrypoints=websecure
+        - traefik.http.routers.megapharm-estoque.tls=true
+        - traefik.http.routers.megapharm-estoque.tls.certresolver=letsencryptresolver
+
+networks:
+  main:
+    external: true
+    name: main
+
+volumes:
+  megapharm-pgdata:

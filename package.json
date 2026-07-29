@@ -1,0 +1,26 @@
+{
+  "name": "megapharm-estoque",
+  "version": "0.1.0",
+  "description": "Controle de estoque MegaPharm (produtos, lotes, fabricacao, validade) com baixa idempotente via webhook de checkout.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node db/migrate.js",
+    "seed": "node db/seed.js",
+    "mock:hubspot": "node dev/mock-hubspot.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-async-errors": "^3.1.1",
+    "express-rate-limit": "^8.5.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.12.0"
+  }
+}

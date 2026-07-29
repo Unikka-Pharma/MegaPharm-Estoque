@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { authRouter } from './auth/routes.js';
 import { stockRouter } from './stock/routes.js';
 import { webhookRouter } from './webhook/routes.js';
+import { diagRouter } from './diag/routes.js';
 import { ensureAdmin } from './auth/bootstrap.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +24,7 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use('/auth', authRouter);
 app.use('/webhooks', webhookRouter);
+app.use('/api/diag', diagRouter);
 app.use('/api', stockRouter);
 
 // Painel admin estatico

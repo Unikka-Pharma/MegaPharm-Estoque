@@ -19,7 +19,7 @@ services:
         condition: any
 
   app:
-    image: ghcr.io/unikka-pharma/megapharm-estoque:latest   # <-- precisa ser uma imagem já publicada
+    image: unikka-pharma/megapharm-estoque:latest   # <-- precisa ser uma imagem já publicada
     depends_on:
       - db
     environment:

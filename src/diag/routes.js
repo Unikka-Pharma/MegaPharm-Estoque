@@ -64,12 +64,33 @@ diagRouter.get('/hubspot', async (_req, res) => {
     const li = await fetch(`${config.hubspot.baseUrl}/crm/v3/objects/line_items?limit=1`, { headers: auth });
     out.checks.lineItemsRead = li.status;
 
+    // Leitura do catalogo de produtos (usada pela importacao). Reproduz EXATAMENTE
+    // a query do cliente (properties repetido) e captura o corpo do erro quando falha,
+    // para revelar a mensagem real do HubSpot (400 "Invalid request" fica mascarado).
+    const prodUrl = `${config.hubspot.baseUrl}/crm/v3/objects/products?limit=1`
+      + `&properties=${encodeURIComponent(config.hubspot.skuProperty)}&properties=name`;
+    const prod = await fetch(prodUrl, { headers: auth });
+    out.checks.productsRead = prod.status;
+    out.hasProductsScope = Array.isArray(out.scopes)
+      ? out.scopes.includes('crm.objects.products.read') || out.scopes.includes('e-commerce')
+      : null;
+    if (!prod.ok) {
+      out.checks.productsError = (await prod.text().catch(() => '')).slice(0, 300);
+    }
+
     out.ok = deals.status === 200 && li.status === 200 &&
       (out.missingScopes ? out.missingScopes.length === 0 : true);
     if (!out.ok) {
       if (deals.status === 401 || li.status === 401) out.hint = 'Token invalido ou expirado (401)';
       else if (deals.status === 403 || li.status === 403) out.hint = 'Token valido mas sem escopo de leitura (403)';
       else if (out.missingScopes && out.missingScopes.length) out.hint = `Faltam escopos: ${out.missingScopes.join(', ')}`;
+    }
+    if (prod.status !== 200) {
+      out.productsHint = prod.status === 403
+        ? 'Falta o escopo crm.objects.products.read no Private App'
+        : prod.status === 400
+          ? `A propriedade de SKU "${config.hubspot.skuProperty}" pode nao existir no objeto de produtos (veja productsError)`
+          : `Leitura de produtos retornou ${prod.status}`;
     }
   } catch (e) {
     out.error = e.message;

@@ -30,7 +30,6 @@ async function hsFetch(path, opts = {}) {
 // (ou e-commerce) no Private App token — senao a API responde 403.
 export async function getCatalogProducts() {
   const skuProp = config.hubspot.skuProperty;
-  const props = [skuProp, 'name'].join(',');
 
   const out = [];
   let after;
@@ -38,7 +37,12 @@ export async function getCatalogProducts() {
   // 500 paginas * 100 = 50k produtos, folgado pro catalogo da farmacia.
   const MAX_PAGES = 500;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const qs = new URLSearchParams({ limit: '100', properties: props });
+    // properties precisa ser REPETIDO (properties=a&properties=b), nao junto por
+    // virgula: o URLSearchParams codifica ',' como %2C e o HubSpot trata como
+    // uma unica propriedade invalida (HTTP 400 "Invalid request").
+    const qs = new URLSearchParams({ limit: '100' });
+    qs.append('properties', skuProp);
+    qs.append('properties', 'name');
     if (after) qs.set('after', after);
     const data = await hsFetch(`/crm/v3/objects/products?${qs.toString()}`);
 

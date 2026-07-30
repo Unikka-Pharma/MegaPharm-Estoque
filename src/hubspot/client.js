@@ -49,6 +49,7 @@ export async function getCatalogProducts() {
     for (const it of data.results || []) {
       const p = it.properties || {};
       out.push({
+        id: it.id != null ? String(it.id) : null,
         sku: String(p[skuProp] ?? '').trim(),
         name: String(p.name ?? '').trim(),
       });

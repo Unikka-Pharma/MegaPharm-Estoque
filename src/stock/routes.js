@@ -22,21 +22,31 @@ stockRouter.post('/products/import-hubspot', async (_req, res) => {
     return res.status(status).json({ error: `Falha ao consultar o HubSpot: ${e.message}` });
   }
 
-  let imported = 0, skipped = 0, invalid = 0;
+  let imported = 0, skipped = 0, invalid = 0, generated = 0;
   await withTx(async (c) => {
     for (const item of catalog) {
-      if (!item.sku || !item.name) { invalid++; continue; }
+      // SKU vem do HubSpot; se faltar, gera um estavel a partir do id (HS-<id>).
+      // Assim re-rodar a importacao nao duplica (o SKU do mesmo produto e sempre igual).
+      let sku = item.sku;
+      if (!sku) {
+        if (!item.id) { invalid++; continue; }  // sem SKU e sem id: nao da p/ identificar
+        sku = `HS-${item.id}`;
+        generated++;
+      }
+      // Nome e obrigatorio (coluna NOT NULL); se faltar, usa o proprio SKU como nome.
+      const name = item.name || sku;
+
       const r = await c.query(
         `insert into products (sku, name)
          values ($1, $2)
          on conflict (sku) do nothing
          returning id`,
-        [item.sku, item.name]);
+        [sku, name]);
       if (r.rowCount) imported++; else skipped++;
     }
   });
 
-  res.json({ total: catalog.length, imported, skipped, invalid });
+  res.json({ total: catalog.length, imported, skipped, invalid, generatedSkus: generated });
 });
 
 stockRouter.get('/products', async (_req, res) => {

@@ -90,8 +90,9 @@ $('#btn-import-hubspot').addEventListener('click', async () => {
     alert(
       'Importação concluída.\n\n' +
       `Novos produtos: ${r.imported}\n` +
+      `  (SKU gerado automaticamente: ${r.generatedSkus ?? 0})\n` +
       `Já existiam (ignorados): ${r.skipped}\n` +
-      `Sem SKU/nome (ignorados): ${r.invalid}\n` +
+      `Sem identificação (ignorados): ${r.invalid}\n` +
       `Total no HubSpot: ${r.total}`);
     loadProducts();
   } catch (err) {

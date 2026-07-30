@@ -83,7 +83,7 @@ $('#btn-import-hubspot').addEventListener('click', async () => {
   const btn = $('#btn-import-hubspot');
   if (!confirm('Importar o catálogo de produtos do HubSpot?\n\n' +
     'Produtos com SKU já cadastrado serão ignorados. Produtos sem SKU no HubSpot ' +
-    'recebem um SKU automático (HS-<id>), que também é gravado de volta no HubSpot.')) return;
+    'recebem um SKU numérico em sequência (10, 20, 30…), que também é gravado de volta no HubSpot.')) return;
   const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Importando…';

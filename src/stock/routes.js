@@ -22,33 +22,52 @@ stockRouter.post('/products/import-hubspot', async (req, res) => {
     return res.status(status).json({ error: `Falha ao consultar o HubSpot: ${e.message}` });
   }
 
-  // Produtos sem SKU no HubSpot ganham um SKU estavel a partir do id (HS-<id>).
-  // Deterministico: re-rodar a importacao nao duplica (mesmo produto -> mesmo SKU).
-  const toGenerate = catalog.filter((it) => !it.sku && it.id);
-  for (const it of toGenerate) it.sku = `HS-${it.id}`;
+  // Produtos sem SKU no HubSpot recebem um SKU numerico em sequencia (10, 20, 30, ...).
+  // Ordem estavel por id do HubSpot para a atribuicao ser reproduzivel.
+  const needSku = catalog
+    .filter((it) => !it.sku && it.id)
+    .sort((a, b) => Number(a.id) - Number(b.id));
 
-  // Grava o SKU gerado de volta no HubSpot (a menos que writeBackSkus:false no body),
-  // para o hs_sku existir nos dois lados e a baixa por venda casar o produto.
-  // Precisa do escopo crm.objects.products.write. Se falhar, a importacao local
-  // segue mesmo assim e o erro e reportado no resultado.
+  // Ponto de partida: continua a partir do maior SKU numerico ja existente (no catalogo
+  // do HubSpot e no banco local), arredondando pro proximo multiplo de 10. Assim nao
+  // reinicia em 10 e nao colide com o que ja foi criado. 1a vez (sem SKU) comeca em 10.
+  const numericFrom = (s) => (/^\d+$/.test(String(s ?? '')) ? parseInt(s, 10) : 0);
+  const maxCatalog = catalog.reduce((m, it) => Math.max(m, numericFrom(it.sku)), 0);
+  // {1,18} evita estourar bigint no cast.
+  const dbMax = await query(
+    `select coalesce(max(sku::bigint), 0)::bigint as m from products where sku ~ '^[0-9]{1,18}$'`);
+  const maxLocal = Number(dbMax.rows[0]?.m || 0);
+  let seq = Math.floor(Math.max(maxCatalog, maxLocal) / 10) * 10 + 10;
+
+  for (const it of needSku) { it.sku = String(seq); seq += 10; }
+
+  // Grava os SKUs gerados de volta no HubSpot (a menos que writeBackSkus:false no body),
+  // para o hs_sku existir nos dois lados e a baixa por venda casar o produto. Precisa do
+  // escopo crm.objects.products.write. Se falhar, os gerados NAO sao importados localmente
+  // (evita duplicar o mesmo produto com numero diferente numa proxima tentativa).
   const writeBack = req.body?.writeBackSkus !== false;
   let skusWritten = 0;
   let writeError = null;
-  if (writeBack && toGenerate.length) {
+  let generatedImportable = true;
+  if (writeBack && needSku.length) {
     try {
-      skusWritten = await setProductSkus(toGenerate.map((it) => ({ id: it.id, sku: it.sku })));
+      skusWritten = await setProductSkus(needSku.map((it) => ({ id: it.id, sku: it.sku })));
     } catch (e) {
       writeError = e.status === 403
-        ? 'Sem escopo crm.objects.products.write no token — SKUs NAO foram gravados no HubSpot'
+        ? 'Sem escopo crm.objects.products.write no token — SKUs NAO foram gravados no HubSpot; produtos sem SKU nao foram importados'
         : `Falha ao gravar SKUs no HubSpot: ${e.message}`;
+      generatedImportable = false;
     }
   }
+  const generatedSkuSet = new Set(needSku.map((it) => it.sku));
 
   let imported = 0, skipped = 0, invalid = 0;
   await withTx(async (c) => {
     for (const item of catalog) {
       const sku = item.sku;
       if (!sku) { invalid++; continue; }  // sem SKU e sem id: nao da p/ identificar
+      // Gerado mas nao gravado no HubSpot -> segura a importacao pra retry limpo depois.
+      if (!generatedImportable && generatedSkuSet.has(sku)) continue;
       // Nome e obrigatorio (coluna NOT NULL); se faltar, usa o proprio SKU como nome.
       const name = item.name || sku;
 
@@ -65,7 +84,7 @@ stockRouter.post('/products/import-hubspot', async (req, res) => {
   res.json({
     total: catalog.length,
     imported, skipped, invalid,
-    generatedSkus: toGenerate.length,
+    generatedSkus: needSku.length,
     skusWrittenToHubspot: skusWritten,
     writeError,
   });

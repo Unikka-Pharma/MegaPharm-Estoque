@@ -76,6 +76,21 @@ diagRouter.get('/hubspot', async (_req, res) => {
       : null;
     if (!prod.ok) {
       out.checks.productsError = (await prod.text().catch(() => '')).slice(0, 300);
+    } else {
+      // Amostra p/ ver se o SKU vem vazio (produtos so com nome) ou em outro campo.
+      // Pede um conjunto amplo de propriedades comuns de produto.
+      const sampleUrl = `${config.hubspot.baseUrl}/crm/v3/objects/products?limit=3`
+        + '&properties=hs_sku&properties=name&properties=price&properties=description';
+      const s = await fetch(sampleUrl, { headers: auth });
+      if (s.ok) {
+        const body = await s.json().catch(() => ({}));
+        out.productsSample = (body.results || []).map((it) => ({
+          id: it.id,
+          hs_sku: it.properties?.hs_sku ?? null,
+          configuredSku: it.properties?.[config.hubspot.skuProperty] ?? null,
+          name: it.properties?.name ?? null,
+        }));
+      }
     }
 
     out.ok = deals.status === 200 && li.status === 200 &&

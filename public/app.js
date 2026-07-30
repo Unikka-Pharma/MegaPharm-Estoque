@@ -81,7 +81,9 @@ async function loadProducts() {
 
 $('#btn-import-hubspot').addEventListener('click', async () => {
   const btn = $('#btn-import-hubspot');
-  if (!confirm('Importar o catálogo de produtos do HubSpot?\n\nProdutos com SKU já cadastrado serão ignorados.')) return;
+  if (!confirm('Importar o catálogo de produtos do HubSpot?\n\n' +
+    'Produtos com SKU já cadastrado serão ignorados. Produtos sem SKU no HubSpot ' +
+    'recebem um SKU automático (HS-<id>), que também é gravado de volta no HubSpot.')) return;
   const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Importando…';
@@ -91,9 +93,11 @@ $('#btn-import-hubspot').addEventListener('click', async () => {
       'Importação concluída.\n\n' +
       `Novos produtos: ${r.imported}\n` +
       `  (SKU gerado automaticamente: ${r.generatedSkus ?? 0})\n` +
+      `SKUs gravados no HubSpot: ${r.skusWrittenToHubspot ?? 0}\n` +
       `Já existiam (ignorados): ${r.skipped}\n` +
       `Sem identificação (ignorados): ${r.invalid}\n` +
-      `Total no HubSpot: ${r.total}`);
+      `Total no HubSpot: ${r.total}` +
+      (r.writeError ? `\n\n⚠️ ${r.writeError}` : ''));
     loadProducts();
   } catch (err) {
     alert('Falha na importação: ' + err.message);

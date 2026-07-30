@@ -61,6 +61,25 @@ export async function getCatalogProducts() {
   return out;
 }
 
+// Grava o SKU (propriedade configurada, padrao hs_sku) de varios produtos no
+// HubSpot, em lote (ate 100 por chamada). Precisa do escopo
+// crm.objects.products.write. updates = [{ id, sku }]. Retorna quantos gravou.
+export async function setProductSkus(updates) {
+  const skuProp = config.hubspot.skuProperty;
+  let written = 0;
+  for (let i = 0; i < updates.length; i += 100) {
+    const chunk = updates.slice(i, i + 100);
+    await hsFetch('/crm/v3/objects/products/batch/update', {
+      method: 'POST',
+      body: JSON.stringify({
+        inputs: chunk.map((u) => ({ id: u.id, properties: { [skuProp]: u.sku } })),
+      }),
+    });
+    written += chunk.length;
+  }
+  return written;
+}
+
 // Busca os line items de um deal e retorna [{ sku, quantity, name }].
 // Itens sem SKU ou com quantidade <= 0 sao descartados (o webhook alerta se sobrar vazio).
 export async function getDealLineItems(dealId) {

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query, withTx } from '../db.js';
 import { requireAuth } from '../auth/middleware.js';
-import { getCatalogProducts } from '../hubspot/client.js';
+import { getCatalogProducts, setProductSkus } from '../hubspot/client.js';
 
 export const stockRouter = Router();
 stockRouter.use(requireAuth);
@@ -12,7 +12,7 @@ stockRouter.use(requireAuth);
 // ignorados (on conflict do nothing); produtos sem SKU ou sem nome tambem.
 // Definida antes de POST '/products' e das rotas com :id (nao ha conflito de path,
 // mas mantem os endpoints de produto agrupados).
-stockRouter.post('/products/import-hubspot', async (_req, res) => {
+stockRouter.post('/products/import-hubspot', async (req, res) => {
   let catalog;
   try {
     catalog = await getCatalogProducts();
@@ -22,17 +22,33 @@ stockRouter.post('/products/import-hubspot', async (_req, res) => {
     return res.status(status).json({ error: `Falha ao consultar o HubSpot: ${e.message}` });
   }
 
-  let imported = 0, skipped = 0, invalid = 0, generated = 0;
+  // Produtos sem SKU no HubSpot ganham um SKU estavel a partir do id (HS-<id>).
+  // Deterministico: re-rodar a importacao nao duplica (mesmo produto -> mesmo SKU).
+  const toGenerate = catalog.filter((it) => !it.sku && it.id);
+  for (const it of toGenerate) it.sku = `HS-${it.id}`;
+
+  // Grava o SKU gerado de volta no HubSpot (a menos que writeBackSkus:false no body),
+  // para o hs_sku existir nos dois lados e a baixa por venda casar o produto.
+  // Precisa do escopo crm.objects.products.write. Se falhar, a importacao local
+  // segue mesmo assim e o erro e reportado no resultado.
+  const writeBack = req.body?.writeBackSkus !== false;
+  let skusWritten = 0;
+  let writeError = null;
+  if (writeBack && toGenerate.length) {
+    try {
+      skusWritten = await setProductSkus(toGenerate.map((it) => ({ id: it.id, sku: it.sku })));
+    } catch (e) {
+      writeError = e.status === 403
+        ? 'Sem escopo crm.objects.products.write no token — SKUs NAO foram gravados no HubSpot'
+        : `Falha ao gravar SKUs no HubSpot: ${e.message}`;
+    }
+  }
+
+  let imported = 0, skipped = 0, invalid = 0;
   await withTx(async (c) => {
     for (const item of catalog) {
-      // SKU vem do HubSpot; se faltar, gera um estavel a partir do id (HS-<id>).
-      // Assim re-rodar a importacao nao duplica (o SKU do mesmo produto e sempre igual).
-      let sku = item.sku;
-      if (!sku) {
-        if (!item.id) { invalid++; continue; }  // sem SKU e sem id: nao da p/ identificar
-        sku = `HS-${item.id}`;
-        generated++;
-      }
+      const sku = item.sku;
+      if (!sku) { invalid++; continue; }  // sem SKU e sem id: nao da p/ identificar
       // Nome e obrigatorio (coluna NOT NULL); se faltar, usa o proprio SKU como nome.
       const name = item.name || sku;
 
@@ -46,7 +62,13 @@ stockRouter.post('/products/import-hubspot', async (_req, res) => {
     }
   });
 
-  res.json({ total: catalog.length, imported, skipped, invalid, generatedSkus: generated });
+  res.json({
+    total: catalog.length,
+    imported, skipped, invalid,
+    generatedSkus: toGenerate.length,
+    skusWrittenToHubspot: skusWritten,
+    writeError,
+  });
 });
 
 stockRouter.get('/products', async (_req, res) => {

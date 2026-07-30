@@ -1,11 +1,43 @@
 import { Router } from 'express';
 import { query, withTx } from '../db.js';
 import { requireAuth } from '../auth/middleware.js';
+import { getCatalogProducts } from '../hubspot/client.js';
 
 export const stockRouter = Router();
 stockRouter.use(requireAuth);
 
 /* ---------------- Produtos ---------------- */
+
+// Importa o catalogo de produtos do HubSpot. Produtos cujo SKU ja existe sao
+// ignorados (on conflict do nothing); produtos sem SKU ou sem nome tambem.
+// Definida antes de POST '/products' e das rotas com :id (nao ha conflito de path,
+// mas mantem os endpoints de produto agrupados).
+stockRouter.post('/products/import-hubspot', async (_req, res) => {
+  let catalog;
+  try {
+    catalog = await getCatalogProducts();
+  } catch (e) {
+    // Repassa erro do HubSpot (token ausente, escopo faltando -> 403, etc.) com mensagem clara.
+    const status = e.status && e.status >= 400 && e.status < 500 ? e.status : 502;
+    return res.status(status).json({ error: `Falha ao consultar o HubSpot: ${e.message}` });
+  }
+
+  let imported = 0, skipped = 0, invalid = 0;
+  await withTx(async (c) => {
+    for (const item of catalog) {
+      if (!item.sku || !item.name) { invalid++; continue; }
+      const r = await c.query(
+        `insert into products (sku, name)
+         values ($1, $2)
+         on conflict (sku) do nothing
+         returning id`,
+        [item.sku, item.name]);
+      if (r.rowCount) imported++; else skipped++;
+    }
+  });
+
+  res.json({ total: catalog.length, imported, skipped, invalid });
+});
 
 stockRouter.get('/products', async (_req, res) => {
   const r = await query(

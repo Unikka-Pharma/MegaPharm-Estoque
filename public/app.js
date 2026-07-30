@@ -79,6 +79,29 @@ async function loadProducts() {
     b.addEventListener('click', () => openBatches(b.dataset.batches, b.dataset.name)));
 }
 
+$('#btn-import-hubspot').addEventListener('click', async () => {
+  const btn = $('#btn-import-hubspot');
+  if (!confirm('Importar o catálogo de produtos do HubSpot?\n\nProdutos com SKU já cadastrado serão ignorados.')) return;
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Importando…';
+  try {
+    const r = await api('/api/products/import-hubspot', { method: 'POST' });
+    alert(
+      'Importação concluída.\n\n' +
+      `Novos produtos: ${r.imported}\n` +
+      `Já existiam (ignorados): ${r.skipped}\n` +
+      `Sem SKU/nome (ignorados): ${r.invalid}\n` +
+      `Total no HubSpot: ${r.total}`);
+    loadProducts();
+  } catch (err) {
+    alert('Falha na importação: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+});
+
 $('#btn-new-product').addEventListener('click', () => $('#product-form').classList.toggle('hidden'));
 $('#p-cancel').addEventListener('click', () => $('#product-form').classList.add('hidden'));
 $('#product-form').addEventListener('submit', async (e) => {
